@@ -1,23 +1,19 @@
-import logo from './logo.svg';
-import './App.css';
+import React, { useState } from 'react';
+import FirmwareList from './FirmwareList';
+import FirmwareUpload from './FirmwareUpload';
 
 function App() {
+  const [refreshList, setRefreshList] = useState(false);
+
+  const handleUpload = () => {
+    setRefreshList((prev) => !prev);
+  };
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div className="container mt-4">
+      <h1 className="mb-4">Gestor de Firmwares</h1>
+      <FirmwareUpload onUpload={handleUpload} />
+      <FirmwareList refresh={refreshList} />
     </div>
   );
 }

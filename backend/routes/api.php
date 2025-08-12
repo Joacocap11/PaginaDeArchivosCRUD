@@ -6,7 +6,6 @@ use App\Http\Controllers\FirmwareController;
 
 Route::apiResource('firmwares', FirmwareController::class);
 
-
 Route::get('/user', function (Request $request) {
     return $request->user();
 })->middleware('auth:sanctum');

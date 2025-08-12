@@ -6,12 +6,14 @@ use Illuminate\Database\Eloquent\Model;
 
 class Firmware extends Model
 {
+    protected $table = 'firmwares';
+
     protected $fillable = [
         'filename',
         'filepath',
+        'filesize',
         'version',
         'description',
-        'filesize',
         'uploaded_by',
     ];
 }

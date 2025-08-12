@@ -5,10 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\Firmware;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class FirmwareController extends Controller
 {
-    // Listar firmwares, con búsqueda simple por filename
     public function index(Request $request)
     {
         $query = Firmware::query();
@@ -21,46 +21,76 @@ class FirmwareController extends Controller
 
         $firmwares = $query->orderBy('created_at', 'desc')->paginate(10);
 
+        $firmwares->getCollection()->transform(function ($firmware) {
+            if ($firmware->filepath) {
+                $firmware->url = asset(str_replace('public/', 'storage/', $firmware->filepath));
+            } else {
+                $firmware->url = null;
+            }
+            return $firmware;
+        });
+
         return response()->json($firmwares);
     }
 
-    // Guardar nuevo firmware con archivo
     public function store(Request $request)
     {
-        $request->validate([
-            'file' => 'required|file|max:51200', // max 50MB
-            'version' => 'nullable|string|max:50',
-            'description' => 'nullable|string',
-        ]);
+        Log::info('Inicio store firmware');
+        Log::info('Request data:', $request->except('file'));
 
-        $file = $request->file('file');
+        try {
 
-        $filename = $file->getClientOriginalName();
-        $filesize = $file->getSize();
+            $request->validate([
+                'file' => 'required|file|max:1022976', // máximo ~999MB
+                'version' => 'nullable|string|max:50',
+                'description' => 'nullable|string',
+            ]);
+            Log::info('Validación correcta');
 
-        // Guardar archivo en storage/app/firmwares
-        $path = $file->store('firmwares');
+            $file = $request->file('file');
+            if (!$file) {
+                Log::error('No se recibió archivo en la petición');
+                return response()->json(['error' => 'Archivo no recibido'], 400);
+            }
 
-        $firmware = Firmware::create([
-            'filename' => $filename,
-            'filepath' => $path,
-            'filesize' => $filesize,
-            'version' => $request->input('version'),
-            'description' => $request->input('description'),
-            'uploaded_by' => 'anonimo', // o usar auth()->user()->name si autenticás
-        ]);
+            $filename = $file->getClientOriginalName();
+            $filesize = $file->getSize();
 
-        return response()->json($firmware, 201);
+            $path = $file->store('public/firmwares');
+            Log::info("Archivo guardado en: {$path}");
+
+            $firmware = Firmware::create([
+                'filename' => $filename,
+                'filepath' => $path,
+                'filesize' => $filesize,
+                'version' => $request->input('version'),
+                'description' => $request->input('description'),
+                'uploaded_by' => 'anonimo',
+            ]);
+
+            $firmware->url = asset(str_replace('public/', 'storage/', $path));
+
+            Log::info('Firmware creado en DB', $firmware->toArray());
+
+            return response()->json($firmware, 201);
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            Log::error('Validación fallida: '.$ve->getMessage());
+            return response()->json(['error' => 'Validación', 'messages' => $ve->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('Error en store firmware: '.$e->getMessage());
+            return response()->json(['error' => 'Error al subir firmware', 'message' => $e->getMessage()], 500);
+        }
     }
 
-    // Mostrar un firmware específico
     public function show($id)
     {
         $firmware = Firmware::findOrFail($id);
+        if ($firmware->filepath) {
+            $firmware->url = asset(str_replace('public/', 'storage/', $firmware->filepath));
+        }
         return response()->json($firmware);
     }
 
-    // Actualizar firmware (opcional, sin archivo)
     public function update(Request $request, $id)
     {
         $firmware = Firmware::findOrFail($id);
@@ -72,16 +102,20 @@ class FirmwareController extends Controller
 
         $firmware->update($request->only(['version', 'description']));
 
+        if ($firmware->filepath) {
+            $firmware->url = asset(str_replace('public/', 'storage/', $firmware->filepath));
+        }
+
         return response()->json($firmware);
     }
 
-    // Eliminar firmware y borrar archivo físico
     public function destroy($id)
     {
         $firmware = Firmware::findOrFail($id);
 
-        // Borrar archivo físico
-        Storage::delete($firmware->filepath);
+        if ($firmware->filepath) {
+            Storage::delete($firmware->filepath);
+        }
 
         $firmware->delete();
 
